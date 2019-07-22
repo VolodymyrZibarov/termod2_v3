@@ -21,7 +21,7 @@
 #ifndef _OWI_BIT_FUNCTIONS_H_
 #define _OWI_BIT_FUNCTIONS_H_
 
-#include "common_files\OWIdefs.h"
+#include "OWIdefs.h"
 #include "OWIPolled.h"
 
 void OWI_Init(unsigned char pins);

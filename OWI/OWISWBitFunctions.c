@@ -19,13 +19,12 @@
 *                         $Date: Thursday, August 19, 2004 14:27:18 UTC $
 ****************************************************************************/
 
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
 #include "OWIPolled.h"
-
-#include "Lufa/Common/Common.h"
-
 #include "OWIBitFunctions.h"
-
-#include "compilers.h"
 
 /*! \brief Initialization of the one wire bus(es). (Software only driver)
  *  
@@ -40,7 +39,7 @@ void OWI_Init(unsigned char pins)
     // The first rising edge can be interpreted by a slave as the end of a
     // Reset pulse. Delay for the required reset recovery time (H) to be 
     // sure that the real reset is interpreted correctly.
-    __delay_cycles(OWI_DELAY_H_STD_MODE);
+    _delay_us(OWI_DELAY_H_STD_MODE);
 }
 
 
@@ -56,19 +55,19 @@ void OWI_WriteBit1(unsigned char pins)
     unsigned char intState;
     
     // Disable interrupts.
-    intState = __save_interrupt();
-    __disable_interrupt();
+    intState = SREG;
+    cli();
     
     // Drive bus low and delay.
     OWI_PULL_BUS_LOW(pins);
-    __delay_cycles(OWI_DELAY_A_STD_MODE);
+    _delay_us(OWI_DELAY_A_STD_MODE);
     
     // Release bus and delay.
     OWI_RELEASE_BUS(pins);
-    __delay_cycles(OWI_DELAY_B_STD_MODE);
+    _delay_us(OWI_DELAY_B_STD_MODE);
     
     // Restore interrupts.
-    __restore_interrupt(intState);
+    SREG=intState;
 }
 
 
@@ -84,19 +83,19 @@ void OWI_WriteBit0(unsigned char pins)
     unsigned char intState;
     
     // Disable interrupts.
-    intState = __save_interrupt();
-    __disable_interrupt();
+    intState = SREG;
+    cli();
     
     // Drive bus low and delay.
     OWI_PULL_BUS_LOW(pins);
-    __delay_cycles(OWI_DELAY_C_STD_MODE);
+    _delay_us(OWI_DELAY_C_STD_MODE);
     
     // Release bus and delay.
     OWI_RELEASE_BUS(pins);
-    __delay_cycles(OWI_DELAY_D_STD_MODE);
+    _delay_us(OWI_DELAY_D_STD_MODE);
     
     // Restore interrupts.
-    __restore_interrupt(intState);
+    SREG=intState;
 }
 
 
@@ -114,23 +113,23 @@ unsigned char OWI_ReadBit(unsigned char pins)
     unsigned char bitsRead;
     
     // Disable interrupts.
-    intState = __save_interrupt();
-    __disable_interrupt();
+    intState = SREG;
+    cli();
     
     // Drive bus low and delay.
     OWI_PULL_BUS_LOW(pins);
-    __delay_cycles(OWI_DELAY_A_STD_MODE);
+    _delay_us(OWI_DELAY_A_STD_MODE);
     
     // Release bus and delay.
     OWI_RELEASE_BUS(pins);
-    __delay_cycles(OWI_DELAY_E_STD_MODE);
+    _delay_us(OWI_DELAY_E_STD_MODE);
     
     // Sample bus and delay.
     bitsRead = OWI_PIN & pins;
-    __delay_cycles(OWI_DELAY_F_STD_MODE);
+    _delay_us(OWI_DELAY_F_STD_MODE);
     
     // Restore interrupts.
-    __restore_interrupt(intState);
+    SREG=intState;
     
     return bitsRead;
 }
@@ -152,23 +151,23 @@ unsigned char OWI_DetectPresence(unsigned char pins)
     unsigned char presenceDetected;
     
     // Disable interrupts.
-    intState = __save_interrupt();
-    __disable_interrupt();
-    
+    intState = SREG;
+    cli();
+
     // Drive bus low and delay.
     OWI_PULL_BUS_LOW(pins);
-    __delay_cycles(OWI_DELAY_H_STD_MODE);
+    _delay_us(OWI_DELAY_H_STD_MODE);
     
     // Release bus and delay.
     OWI_RELEASE_BUS(pins);
-    __delay_cycles(OWI_DELAY_I_STD_MODE);
+    _delay_us(OWI_DELAY_I_STD_MODE);
     
     // Sample bus to detect presence signal and delay.
     presenceDetected = ((~OWI_PIN) & pins);
-    __delay_cycles(OWI_DELAY_J_STD_MODE);
+    _delay_us(OWI_DELAY_J_STD_MODE);
     
     // Restore interrupts.
-    __restore_interrupt(intState);
+    SREG=intState;
     
     return presenceDetected;
 }

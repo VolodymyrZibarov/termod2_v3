@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 
-#include "OWI_Config.h"
+#include "OWIPolled.h"
 #include "OWIHighLevelFunctions.h"
 #include "OWIBitFunctions.h"
 #include "OWIcrc.h"
@@ -15,8 +15,8 @@
 #define DS18B20_READ_SCRATCHPAD          0xbe
 
 // output number for sensor
-#define OWI_BUS OWI_PIN_0
-// OWI port is set in OWI_CONFIG.h
+#define OWI_BUS OWI_PIN_0   // OWI port is set in OWIPolled.h
+
 
 /* maximum number of DS1820/DS18S20 connected to the bus */
 #define MAX_DEVICES 2
@@ -24,11 +24,11 @@ static OWI_device rom_codes[MAX_DEVICES];
 
 static unsigned char nowdig=1;
 static unsigned char nowel=1;
-static unsigned char digs[5];
+static unsigned char digs[5]={0x00,0x40,0x40,0x40,0x40};    // using 1-4 indexes
+static unsigned char mindig=1;
+static unsigned char maxdig=4;
 static int number=0;
-static int temp[2]={0,0};
-static unsigned char devices;
-static unsigned char mindig,maxdig;
+static int temp[2]={888,-88};
 static unsigned char nowTempId=0;
 static int nowTempCounter=0;
 
@@ -105,7 +105,7 @@ void comp(void){
 // Timer 0 overflow interrupt service routine
 ISR(TIMER0_OVF_vect){
     nowTempCounter++;
-    if(nowTempCounter>=7800){   // 1 sec
+    if(nowTempCounter>=7800){   // 2 sec
         nowTempCounter=0;
         nowTempId++;
         if(nowTempId>1){
@@ -160,125 +160,112 @@ ISR(TIMER0_OVF_vect){
 }
 
 void getds1820(unsigned char device){
-      int tmp;
-      tmp=ds1820_temperature_10(&rom_codes[device][0]);      
-      if(tmp>-999){
-        tmp=tmp/10;
-        temp[device]=tmp;
-      }  
+    OWI_DetectPresence(OWI_BUS);
+    OWI_MatchRom(rom_codes[device].id,OWI_BUS);
+    OWI_SendByte(DS18B20_CONVERT_T ,OWI_BUS);
+    // wait for temperature convertation to finish
+    while (!OWI_ReadBit(OWI_BUS)){}
+
+    OWI_DetectPresence(OWI_BUS);
+    OWI_MatchRom(rom_codes[device].id,OWI_BUS);
+    OWI_SendByte(DS18B20_READ_SCRATCHPAD, OWI_BUS);
+    unsigned char scratchpad[2];
+    unsigned char negative=0;
+    scratchpad[0] = OWI_ReceiveByte(OWI_BUS);
+    scratchpad[1] = OWI_ReceiveByte(OWI_BUS);
+    // todo test for negative values
+    if ((scratchpad[1]&0x80)){
+        // negative
+        unsigned int tmp;
+        tmp = ((unsigned int)scratchpad[1]<<8)|scratchpad[0];
+        tmp = ~tmp + 1;
+        scratchpad[0] = tmp;
+        scratchpad[1] = tmp>>8;
+        negative=1;
+    }
+    int result=(scratchpad[0]>>4)|((scratchpad[1]&7)<<4);
+    if(negative){
+        result=-result;
+    }
+    temp[device] = result;
 }
 
-void main(void)
+int main(void)
 {
-unsigned int ubrtmp;
-/* initialize the UART's baud rate */
-ubrtmp=xtal/16/baud-1;
-UBRRL=ubrtmp/256;
-UBRRH=ubrtmp;
-/* initialize the UART control register
-   TX enabled, no interrupts, 8 data bits */
-UCSRA=0x00;
-UCSRB=0x04;
-UCSRC=0x06;
-/* detect how many DS1820/DS18S20 devices
-   are connected to the bus and
-   store their ROM codes in the rom_codes array */
-devices=w1_search(0xf0,rom_codes);
-/* if no devices were detected then halt */
-//if (devices==0) while (1); /* loop forever */
+    // not using UART
+    UCSRA=0x20;
+    UCSRB=0x00;
+    UCSRC=0x86;
 
-// Declare your local variables here
+    PORTB=0x01;
+    DDRB=0x3f;//0b00111111;
 
-// Input/Output Ports initialization
-// Port B initialization
-// Func7=In Func6=In Func5=In Func4=Out Func3=Out Func2=Out Func1=Out Func0=Out 
-// State7=T State6=T State5=T State4=1 State3=1 State2=1 State1=1 State0=0 
-PORTB=0x1;
-DDRB=0b00111111;
+    PORTC=0x18; //0b00011000;
+    DDRC=0x1f;
 
-// Port C initialization
-// Func6=In Func5=In Func4=In Func3=In Func2=Out Func1=Out Func0=Out 
-// State6=T State5=T State4=T State3=T State2=1 State1=1 State0=1 
-PORTC=0b00011000;
-DDRC=0x1f;
+    PORTD=0x80;
+    DDRD=0x80;
 
-// Port D initialization
-// Func7=Out Func6=Out Func5=Out Func4=Out Func3=Out Func2=Out Func1=In Func0=In 
-// State7=0 State6=0 State5=0 State4=1 State3=1 State2=1 State1=T State0=T 
-PORTD=0x80;
-DDRD=0x80;
+    // timer 0 - working, one ovf interrupt
+    TCCR0=0x02; // prescaler: 1/8 => 1Mhz timer clock => 3906 overflows per second
+    TCNT0=0x00;
 
-// Timer/Counter 0 initialization
-// Clock source: System Clock
-// Clock value: 2000,000 kHz
-TCCR0=0x02;
-TCNT0=0x00;
+    // timer 1 - off
+    TCCR1A=0x00;
+    TCCR1B=0x00;
+    TCNT1H=0x00;
+    TCNT1L=0x00;
+    ICR1H=0x00;
+    ICR1L=0x00;
+    OCR1AH=0x00;
+    OCR1AL=0x00;
+    OCR1BH=0x00;
+    OCR1BL=0x00;
 
-// Timer/Counter 1 initialization
-// Clock source: System Clock
-// Clock value: Timer 1 Stopped
-// Mode: Normal top=FFFFh
-// OC1A output: Discon.
-// OC1B output: Discon.
-// Noise Canceler: Off
-// Input Capture on Falling Edge
-// Timer 1 Overflow Interrupt: Off
-// Input Capture Interrupt: Off
-// Compare A Match Interrupt: Off
-// Compare B Match Interrupt: Off
-TCCR1A=0x00;
-TCCR1B=0x00;
-TCNT1H=0x00;
-TCNT1L=0x00;
-ICR1H=0x00;
-ICR1L=0x00;
-OCR1AH=0x00;
-OCR1AL=0x00;
-OCR1BH=0x00;
-OCR1BL=0x00;
+    // timer 2 - off
+    ASSR=0x00;
+    TCCR2=0x00;
+    TCNT2=0x00;
+    OCR2=0x00;
 
-// Timer/Counter 2 initialization
-// Clock source: System Clock
-// Clock value: Timer 2 Stopped
-// Mode: Normal top=FFh
-// OC2 output: Disconnected
-ASSR=0x00;
-TCCR2=0x00;
-TCNT2=0x00;
-OCR2=0x00;
+    // no external interrupts
+    MCUCR=0x00;
 
-// External Interrupt(s) initialization
-// INT0: Off
-// INT1: Off
-MCUCR=0x00;
+    // TOIE0=1
+    TIMSK=0x01;
 
-// Timer(s)/Counter(s) Interrupt(s) initialization 
-// TOIE0=1
-TIMSK=0x01;
+    // Input comparator - off
+    ACSR=0x80;
+    SFIOR=0x00;
 
-// Analog Comparator initialization
-// Analog Comparator: Off
-// Analog Comparator Input Capture by Timer/Counter 1: Off
-ACSR=0x80;
-SFIOR=0x00;
+    // ADC - off
+    ADMUX=0x00;
+    ADCSRA=0x00;
 
-// ADC initialization
-// ADC Clock frequency: 125,000 kHz
-// ADC Voltage Reference: AREF pin
-// Only the 8 most significant bits of
-// the AD conversion result are used
-ADMUX=0x00;
-ADCSRA=0x00;
+    _delay_ms(1000);
 
-// Global enable interrupts
-#asm("sei")
+    OWI_Init(OWI_BUS);
 
-while (1)
-      {
+    unsigned char devicesFound=0;
+    while(1){
+        unsigned char res=OWI_SearchDevices(rom_codes,2,OWI_BUS,&devicesFound);
+        if(res!=SEARCH_SUCCESSFUL){
+            temp[0]=333;
+            temp[1]=-33;
+            continue;
+        }
+    }
+
+    // Global enable interrupts
+    sei();
+
+    while (1){
         getds1820(0);
-        delay_ms(3000);        
-        getds1820(1);        
-        delay_ms(3000);        
-      };
+        _delay_ms(3000);
+        getds1820(1);
+        _delay_ms(3000);
+    };
+
+    return 0;
 }
                

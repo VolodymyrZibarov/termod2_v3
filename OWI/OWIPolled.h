@@ -21,21 +21,13 @@
 #ifndef _OWI_POLLED_H_
 #define _OWI_POLLED_H_
 
-#include "common_files\OWIdefs.h"
-#include "common_files\OWIDeviceSpecific.h"
+#include "OWIdefs.h"
+#include "OWIDeviceSpecific.h"
 
 
 /*****************************************************************************
  The following defines only has an effect on the software only driver.
 *****************************************************************************/
-/*! \brief  CPU clock frequency. 
- *  
- *  This define is used to calculate delays when the software only driver
- *  is used. The CPU frequency must be at least 2.170 MHz to be able to
- *  generate the shortest delays.
- */
-#define     CPU_FREQUENCY   16.000
-
 
 /*! \brief  Use internal pull-up resistor on 1-Wire buses.
  *
@@ -48,9 +40,9 @@
 
 // Port configuration registers for 1-Wire buses.
 // Make sure that all three registers belong to the same port.
-#define     OWI_PORT        PORTB   //!< 1-Wire PORT Data register.
-#define     OWI_PIN         PINB    //!< 1-Wire Input pin register.
-#define     OWI_DDR         DDRB    //!< 1-Wire Data direction register.
+#define     OWI_PORT        PORTD   //!< 1-Wire PORT Data register.
+#define     OWI_PIN         PIND    //!< 1-Wire Input pin register.
+#define     OWI_DDR         DDRD    //!< 1-Wire Data direction register.
 
 
 /*****************************************************************************
@@ -71,19 +63,17 @@
  Timing parameters
 *****************************************************************************/
 
-#define     OWI_DELAY_OFFSET_CYCLES    13   //!< Timing delay when pulling bus low and releasing bus.
-
 // Bit timing delays in clock cycles (= us*clock freq in MHz).
-#define     OWI_DELAY_A_STD_MODE    ((6   * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_B_STD_MODE    ((64  * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_C_STD_MODE    ((60  * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_D_STD_MODE    ((10  * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_E_STD_MODE    ((9   * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_F_STD_MODE    ((55  * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-//#define     OWI_DELAY_G_STD_MODE  ((0   * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_H_STD_MODE    ((480 * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_I_STD_MODE    ((70  * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
-#define     OWI_DELAY_J_STD_MODE    ((410 * CPU_FREQUENCY) - OWI_DELAY_OFFSET_CYCLES)
+#define     OWI_DELAY_A_STD_MODE    6
+#define     OWI_DELAY_B_STD_MODE    64
+#define     OWI_DELAY_C_STD_MODE    60
+#define     OWI_DELAY_D_STD_MODE    10
+#define     OWI_DELAY_E_STD_MODE    9
+#define     OWI_DELAY_F_STD_MODE    55
+//#define     OWI_DELAY_G_STD_MODE  0
+#define     OWI_DELAY_H_STD_MODE    480
+#define     OWI_DELAY_I_STD_MODE    70
+#define     OWI_DELAY_J_STD_MODE    410
 
 
 

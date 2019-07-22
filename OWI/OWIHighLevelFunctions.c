@@ -19,11 +19,13 @@
 *                         $Revision: 1.7 $
 *                         $Date: Thursday, August 19, 2004 14:27:18 UTC $
 ****************************************************************************/
-#include "Lufa/Common/Common.h"
+
+#include <avr/io.h>
+
 #include "OWIHighLevelFunctions.h"
 #include "OWIBitFunctions.h"
 #include "OWIPolled.h"
-#include "common_files\OWIcrc.h"
+#include "OWIcrc.h"
 
 /*! \brief  Sends one byte of data on the 1-Wire(R) bus(es).
  *  
@@ -287,7 +289,7 @@ unsigned char OWI_SearchDevices(OWI_device * devices, unsigned char numDevices, 
     unsigned char lastDeviation;
     unsigned char numFoundDevices;
     
-    //сбрасываем адреса 1Wire устройств    
+    //reset 1wire devices  
     for (i = 0; i < numDevices; i++)
     {
         for (j = 0; j < 8; j++)
