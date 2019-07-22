@@ -44,8 +44,11 @@ unsigned char nowdig=1;
 unsigned char nowel=1;
 unsigned char digs[5];
 int number=0;
+int temp[2]={0,0};
 unsigned char devices;
 unsigned char mindig,maxdig;
+unsigned char nowTempId=0;
+int nowTempCounter=0;
 
 #define mdig1 PORTC.4
 #define mdig2 PORTC.3
@@ -113,6 +116,18 @@ interrupt [TIM0_OVF] void timer0_ovf_isr(void)
 {
 // Place your code here
 // ÎÁÙÈÉ ÊÀÒÎÄ, ÄÈÃ â èñõîäíîì = 1, ÀÁÑ..=0
+
+    nowTempCounter++;
+    if(nowTempCounter==7800){   // 1 sec
+        nowTempCounter=0;
+        nowTempId++;
+        if(nowTempId>1){
+            nowTempId=0;
+        }   
+        number=temp[nowTempId];
+        comp();
+    }
+
 
 /*           
         mdig1=1;
@@ -200,10 +215,12 @@ interrupt [TIM0_OVF] void timer0_ovf_isr(void)
 // Declare your global variables here
 
 void getds1820(unsigned char device){
-      int temp;
-      temp=ds1820_temperature_10(&rom_codes[device][0]);
-      number=temp/10;  
-      comp();
+      int tmp;
+      tmp=ds1820_temperature_10(&rom_codes[device][0]);      
+      if(tmp>-999){
+        tmp=tmp/10;
+        temp[device]=tmp;
+      }  
 }
 
 void main(void)
@@ -314,9 +331,9 @@ ADCSRA=0x00;
 while (1)
       {
         getds1820(0);
-        delay_ms(2000);
+        delay_ms(3000);        
         getds1820(1);        
-        delay_ms(2000);        
+        delay_ms(3000);        
       };
 }
                
