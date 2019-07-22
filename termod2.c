@@ -64,6 +64,12 @@ void comp(void){
         char tmp[3];
         unsigned char k=1;
         unsigned char i;
+        if(number>999){
+            number=999;
+        }
+        if(number<-99){
+            number=-99;
+        }
         itoa(number,tmp);         
         if(number<0){k++;}
         if(number>=10 || number<=-10){k++;}
@@ -194,11 +200,9 @@ interrupt [TIM0_OVF] void timer0_ovf_isr(void)
 // Declare your global variables here
 
 void getds1820(unsigned char device){
-      do{
-              int temp;
-              temp=ds1820_temperature_10(&rom_codes[device][0]);
-              number=temp/10;  
-      }while(number<-60);
+      int temp;
+      temp=ds1820_temperature_10(&rom_codes[device][0]);
+      number=temp/10;  
       comp();
 }
 
