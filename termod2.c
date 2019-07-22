@@ -1,67 +1,58 @@
-/*****************************************************
-This program was produced by the
-CodeWizardAVR V1.24.6 Professional
-Automatic Program Generator
-© Copyright 1998-2005 Pavel Haiduc, HP InfoTech s.r.l.
-http://www.hpinfotech.com
-e-mail:office@hpinfotech.com
+#include <avr/io.h>
+#include <avr/interrupt.h>
 
-Project : 
-Version : 
-Date    : 18.12.2007
-Author  : F4CG                            
-Company : F4CG                            
-Comments: 
+#include <util/delay.h>
 
-
-Chip type           : ATmega8
-Program type        : Application
-Clock frequency     : 8,000000 MHz
-Memory model        : Small
-External SRAM size  : 0
-Data Stack size     : 256
-*****************************************************/
-
-#include <mega8.h>
 #include <stdlib.h>
-#include <ds1820.h>
-#include <stdio.h>
-#include <delay.h>
 
-#asm
-    .equ __w1_port=0x12 ;PORTD
-    .equ __w1_bit=0
-#endasm
-/* quartz crystal frequency [Hz] */
-#define xtal 8000000L
-/* Baud rate */
-#define baud 9600
+#include "OWI_Config.h"
+#include "OWIHighLevelFunctions.h"
+#include "OWIBitFunctions.h"
+#include "OWIcrc.h"
+
+// DS18B20 commands
+#define DS18B20_CONVERT_T                0x44
+#define DS18B20_READ_SCRATCHPAD          0xbe
+
+// output number for sensor
+#define OWI_BUS OWI_PIN_0
+// OWI port is set in OWI_CONFIG.h
+
 /* maximum number of DS1820/DS18S20 connected to the bus */
 #define MAX_DEVICES 2
-unsigned char rom_codes[MAX_DEVICES][9];
+static OWI_device rom_codes[MAX_DEVICES];
 
-unsigned char nowdig=1;
-unsigned char nowel=1;
-unsigned char digs[5];
-int number=0;
-int temp[2]={0,0};
-unsigned char devices;
-unsigned char mindig,maxdig;
-unsigned char nowTempId=0;
-int nowTempCounter=0;
+static unsigned char nowdig=1;
+static unsigned char nowel=1;
+static unsigned char digs[5];
+static int number=0;
+static int temp[2]={0,0};
+static unsigned char devices;
+static unsigned char mindig,maxdig;
+static unsigned char nowTempId=0;
+static int nowTempCounter=0;
 
-#define mdig1 PORTC.4
-#define mdig2 PORTC.3
-#define mdig3 PORTD.7
-#define mdig4 PORTB.0
-#define ma PORTB.1
-#define mb PORTB.2
-#define mc PORTB.3
-#define md PORTB.4
-#define me PORTB.5
-#define mf PORTC.0
-#define mg PORTC.1
-#define dp PORTC.2
+#define mdig12_port PORTC
+#define mdig1_pin 4
+#define mdig2_pin 3
+
+#define mdig3_port PORTD
+#define mdig3_pin 7
+
+#define mdig4_port PORTB
+#define mdig4_pin 0
+
+#define mae_port PORTB
+#define ma_pin 1
+#define mb_pin 2
+#define mc_pin 3
+#define md_pin 4
+#define me_pin 5
+
+#define mfgdp_port PORTC
+#define mf_pin 0
+#define mg_pin 1
+#define dp_pin 2
 
 void comp(void){
         char tmp[3];
@@ -73,7 +64,7 @@ void comp(void){
         if(number<-99){
             number=-99;
         }
-        itoa(number,tmp);         
+        itoa(number,tmp, 10);
         if(number<0){k++;}
         if(number>=10 || number<=-10){k++;}
         if(number>=100){k++;}
@@ -82,43 +73,39 @@ void comp(void){
         for(i=1;i<=3;i++){
                 digs[i]=0x00;
         }
-        digs[4]=0b01100011;
+        digs[4]=0x63;//01100011;    // C
         for(i=1;i<=k;i++){
                 switch(tmp[i-1]){
-                        case '-': digs[i+3-k]=0b01000000;
+                        case '-': digs[i+3-k]=0x40;//01000000;
                                 break;
-                        case '0': digs[i+3-k]=0b00111111;
+                        case '0': digs[i+3-k]=0x3f;//00111111;
                                 break;
-                        case '1': digs[i+3-k]=0b00000110;
+                        case '1': digs[i+3-k]=0x06;//00000110;
                                 break;
-                        case '2': digs[i+3-k]=0b01011011;
+                        case '2': digs[i+3-k]=0x5b;//01011011;
                                 break;
-                        case '3': digs[i+3-k]=0b01001111;
+                        case '3': digs[i+3-k]=0x4f;//01001111;
                                 break;
-                        case '4': digs[i+3-k]=0b01100110;
+                        case '4': digs[i+3-k]=0x66;//01100110;
                                 break;
-                        case '5': digs[i+3-k]=0b01101101;
+                        case '5': digs[i+3-k]=0x6d;//01101101;
                                 break;
-                        case '6': digs[i+3-k]=0b01111101;
+                        case '6': digs[i+3-k]=0x7d;//01111101;
                                 break;
-                        case '7': digs[i+3-k]=0b00000111;
+                        case '7': digs[i+3-k]=0x07;//00000111;
                                 break;
-                        case '8': digs[i+3-k]=0b01111111;
+                        case '8': digs[i+3-k]=0x7f;//01111111;
                                 break;
-                        case '9': digs[i+3-k]=0b01101111;
+                        case '9': digs[i+3-k]=0x6f;//01101111;
                                 break;
                 }
         }
 }
 
 // Timer 0 overflow interrupt service routine
-interrupt [TIM0_OVF] void timer0_ovf_isr(void)
-{
-// Place your code here
-// ÎÁÙÈÉ ÊÀÒÎÄ, ÄÈÃ â èñõîäíîì = 1, ÀÁÑ..=0
-
+ISR(TIMER0_OVF_vect){
     nowTempCounter++;
-    if(nowTempCounter==7800){   // 1 sec
+    if(nowTempCounter>=7800){   // 1 sec
         nowTempCounter=0;
         nowTempId++;
         if(nowTempId>1){
@@ -128,91 +115,49 @@ interrupt [TIM0_OVF] void timer0_ovf_isr(void)
         comp();
     }
 
+    nowel++;
+    if(nowel>7){
+        nowel=1;
+        nowdig++;
+        if(nowdig>maxdig){
+            nowdig=mindig;
+        }
 
-/*           
-        mdig1=1;
-        mdig2=1;
-        mdig3=1;
-        mdig4=1; 
-        ma=0;
-        mb=0;
-        mc=0;
-        md=0;
-        me=0;
-        mf=0;
-        mg=0;
-*/
-        nowel++;
-        if(nowel==8){
-                nowel=1;
-                nowdig++;     
-                if(nowdig==maxdig+1){
-                  nowdig=mindig;
-                }    
-                ///
-                //mdig1=1;
-                //mdig2=1;
-                mdig3=1;
-                //mdig4=1; 
-                /*
-                ma=0;
-                mb=0;
-                mc=0;
-                md=0;
-                me=0;
-                mf=0;
-                mg=0;                
-                */
-                PORTB=0x01;
-                PORTC=0x18;
-                ///
-        }
-        switch(nowdig){
-                case 1: mdig1=0;
-                        break;
-                case 2: mdig2=0;
-                        break;
-                case 3: mdig3=0;
-                        break;
-                case 4: mdig4=0;
-                        break;
-        }             
-/*
-        switch(nowel){
-                case 1: if(digs[nowdig] & 0b00000001){ma=1;}
-                        break;
-                case 2: if(digs[nowdig] & 0b00000010){mb=1;}
-                        break;
-                case 3: if(digs[nowdig] & 0b00000100){mc=1;}
-                        break;
-                case 4: if(digs[nowdig] & 0b00001000){md=1;}
-                        break;
-                case 5: if(digs[nowdig] & 0b00010000){me=1;}
-                        break;
-                case 6: if(digs[nowdig] & 0b00100000){mf=1;}
-                        break;                           
-                case 7: if(digs[nowdig] & 0b01000000){mg=1;}
-                        break;
-        }
-*/             
-        /// 
-        if(nowel==1){  
-                /*
-                if(digs[nowdig] & 0b00000001){ma=1;}
-                if(digs[nowdig] & 0b00000010){mb=1;}
-                if(digs[nowdig] & 0b00000100){mc=1;}
-                if(digs[nowdig] & 0b00001000){md=1;}
-                if(digs[nowdig] & 0b00010000){me=1;}
-                if(digs[nowdig] & 0b00100000){mf=1;}
-                if(digs[nowdig] & 0b01000000){mg=1;}
-                */
-                PORTB|=(digs[nowdig]<<1);
-                PORTC|=(digs[nowdig]>>5);
-        }
-        ///
+        // clear leds
+
+        // Common CATHOD, Digital initial = 1, ABC..=0
+
+        mdig12_port|=((1<<mdig1_pin)|(1<<mdig2_pin));
+        mdig3_port|=(1<<mdig3_pin);
+        mdig4_port|=(1<<mdig4_pin);
+
+        mae_port&=(~(1<<ma_pin)|(1<<mb_pin)|(1<<mc_pin)|(1<<md_pin)|(1<<me_pin));
+        mfgdp_port&=(~(1<<mf_pin)|(1<<mg_pin));
+    }
+
+    // select digit
+    switch(nowdig){
+    case 1: mdig12_port&=(~(1<<mdig1_pin));break;
+    case 2: mdig12_port&=(~(1<<mdig2_pin));break;
+    case 3: mdig3_port&=(~(1<<mdig3_pin));break;
+    case 4: mdig4_port&=(~(1<<mdig4_pin));break;
+    }
+
+    if(nowel==1){
+        unsigned char dig=digs[nowdig];
+
+        // light up elements
+        mae_port|=((((dig >> 0)&1)<<ma_pin)|
+                   (((dig >> 1)&1)<<mb_pin)|
+                   (((dig >> 2)&1)<<mc_pin)|
+                   (((dig >> 3)&1)<<md_pin)|
+                   (((dig >> 4)&1)<<me_pin)
+                   );
+        mfgdp_port|=((((dig >> 5)&1)<<mf_pin)|
+                     (((dig >> 6)&1)<<mg_pin)
+                     );
+    }
 }
-      
-// Declare your global variables here
 
 void getds1820(unsigned char device){
       int tmp;
