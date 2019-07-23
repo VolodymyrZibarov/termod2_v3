@@ -23,12 +23,12 @@
 static OWI_device rom_codes[MAX_DEVICES];
 
 static unsigned char nowdig=1;
-static unsigned char nowel=1;
-static unsigned char digs[5]={0x00,0x40,0x40,0x40,0x40};    // using 1-4 indexes
+static unsigned char showDigCounter=0;
+static unsigned char digs[5]={0x00,0xff,0xff,0xff,0xff};    // using 1-4 indexes
 static unsigned char mindig=1;
 static unsigned char maxdig=4;
 static int number=0;
-static int temp[2]={888,-88};
+static int temp[2]={0x7fff,0x7fff};
 static unsigned char nowTempId=0;
 static int nowTempCounter=0;
 
@@ -55,51 +55,89 @@ static int nowTempCounter=0;
 #define dp_pin 2
 
 void comp(void){
-        char tmp[3];
-        unsigned char k=1;
-        unsigned char i;
-        if(number>999){
-            number=999;
-        }
-        if(number<-99){
-            number=-99;
-        }
-        itoa(number,tmp, 10);
-        if(number<0){k++;}
-        if(number>=10 || number<=-10){k++;}
-        if(number>=100){k++;}
-        mindig=4-k;
+    if(nowTempId==0){
+        digs[4]=0x01;
+        maxdig=4;
+    }else{
         maxdig=3;
-        for(i=1;i<=3;i++){
-                digs[i]=0x00;
+    }
+    if(number==0x7fff){
+        mindig=2;
+        digs[2]=0x40;
+        digs[3]=0x40;
+        return;
+    }
+    char tmp[3];
+    tmp[0]=0;
+    tmp[1]=0;
+    tmp[2]=0;
+    unsigned char k=1;
+    unsigned char i;
+    if(number>999){
+        number=999;
+    }
+    if(number<-99){
+        number=-99;
+    }
+    itoa(number,tmp, 10);
+    if(number<0){k++;}
+    if(number>=10 || number<=-10){k++;}
+    if(number>=100){k++;}
+    mindig=4-k;
+
+    // LED names:
+    //
+    //    ---a---
+    //   |       |
+    //   f       b
+    //   |       |
+    //    ---g---
+    //   |       |
+    //   e       c
+    //   |       |
+    //    ---d---  dp
+
+    // bit numbers:
+    //
+    //    ---0---
+    //   |       |
+    //   5       1
+    //   |       |
+    //    ---6---
+    //   |       |
+    //   4       2
+    //   |       |
+    //    ---3---  7
+
+
+    for(i=1;i<=k;i++){
+        switch(tmp[i-1]){
+        case '-': digs[i+3-k]=0x40;//01000000;
+            break;
+        case '0': digs[i+3-k]=0x3f;//00111111;
+            break;
+        case '1': digs[i+3-k]=0x06;//00000110;
+            break;
+        case '2': digs[i+3-k]=0x5b;//01011011;
+            break;
+        case '3': digs[i+3-k]=0x4f;//01001111;
+            break;
+        case '4': digs[i+3-k]=0x66;//01100110;
+            break;
+        case '5': digs[i+3-k]=0x6d;//01101101;
+            break;
+        case '6': digs[i+3-k]=0x7d;//01111101;
+            break;
+        case '7': digs[i+3-k]=0x07;//00000111;
+            break;
+        case '8': digs[i+3-k]=0x7f;//01111111;
+            break;
+        case '9': digs[i+3-k]=0x6f;//01101111;
+            break;
+        default: digs[i+3-k]=0x08; //'_'
+            break;
         }
-        digs[4]=0x63;//01100011;    // C
-        for(i=1;i<=k;i++){
-                switch(tmp[i-1]){
-                        case '-': digs[i+3-k]=0x40;//01000000;
-                                break;
-                        case '0': digs[i+3-k]=0x3f;//00111111;
-                                break;
-                        case '1': digs[i+3-k]=0x06;//00000110;
-                                break;
-                        case '2': digs[i+3-k]=0x5b;//01011011;
-                                break;
-                        case '3': digs[i+3-k]=0x4f;//01001111;
-                                break;
-                        case '4': digs[i+3-k]=0x66;//01100110;
-                                break;
-                        case '5': digs[i+3-k]=0x6d;//01101101;
-                                break;
-                        case '6': digs[i+3-k]=0x7d;//01111101;
-                                break;
-                        case '7': digs[i+3-k]=0x07;//00000111;
-                                break;
-                        case '8': digs[i+3-k]=0x7f;//01111111;
-                                break;
-                        case '9': digs[i+3-k]=0x6f;//01101111;
-                                break;
-                }
-        }
+    }
 }
 
 // Timer 0 overflow interrupt service routine
@@ -110,14 +148,16 @@ ISR(TIMER0_OVF_vect){
         nowTempId++;
         if(nowTempId>1){
             nowTempId=0;
-        }   
+        }
         number=temp[nowTempId];
         comp();
+        nowdig=maxdig;
+        showDigCounter=250;
     }
 
-    nowel++;
-    if(nowel>7){
-        nowel=1;
+    showDigCounter++;
+    if(showDigCounter>20){
+        showDigCounter=1;
         nowdig++;
         if(nowdig>maxdig){
             nowdig=mindig;
@@ -125,25 +165,23 @@ ISR(TIMER0_OVF_vect){
 
         // clear leds
 
-        // Common CATHOD, Digital initial = 1, ABC..=0
+        // Common CATHOD, Digs initial = 1, ABC.. initial = 0
 
         mdig12_port|=((1<<mdig1_pin)|(1<<mdig2_pin));
         mdig3_port|=(1<<mdig3_pin);
         mdig4_port|=(1<<mdig4_pin);
 
-        mae_port&=(~(1<<ma_pin)|(1<<mb_pin)|(1<<mc_pin)|(1<<md_pin)|(1<<me_pin));
-        mfgdp_port&=(~(1<<mf_pin)|(1<<mg_pin));
-    }
+        mae_port&=~((1<<ma_pin)|(1<<mb_pin)|(1<<mc_pin)|(1<<md_pin)|(1<<me_pin));
+        mfgdp_port&=~((1<<mf_pin)|(1<<mg_pin)|(1<<dp_pin));
 
-    // select digit
-    switch(nowdig){
-    case 1: mdig12_port&=(~(1<<mdig1_pin));break;
-    case 2: mdig12_port&=(~(1<<mdig2_pin));break;
-    case 3: mdig3_port&=(~(1<<mdig3_pin));break;
-    case 4: mdig4_port&=(~(1<<mdig4_pin));break;
-    }
+        // select digit
+        switch(nowdig){
+        case 1: mdig12_port&=~(1<<mdig1_pin);break;
+        case 2: mdig12_port&=~(1<<mdig2_pin);break;
+        case 3: mdig3_port&=~(1<<mdig3_pin);break;
+        case 4: mdig4_port&=~(1<<mdig4_pin);break;
+        }
 
-    if(nowel==1){
         unsigned char dig=digs[nowdig];
 
         // light up elements
@@ -154,8 +192,10 @@ ISR(TIMER0_OVF_vect){
                    (((dig >> 4)&1)<<me_pin)
                    );
         mfgdp_port|=((((dig >> 5)&1)<<mf_pin)|
-                     (((dig >> 6)&1)<<mg_pin)
+                     (((dig >> 6)&1)<<mg_pin)|
+                     (((dig >> 7)&1)<<dp_pin)
                      );
+
     }
 }
 
@@ -169,25 +209,18 @@ void getds1820(unsigned char device){
     OWI_DetectPresence(OWI_BUS);
     OWI_MatchRom(rom_codes[device].id,OWI_BUS);
     OWI_SendByte(DS18B20_READ_SCRATCHPAD, OWI_BUS);
-    unsigned char scratchpad[2];
-    unsigned char negative=0;
+    char scratchpad[2];
     scratchpad[0] = OWI_ReceiveByte(OWI_BUS);
     scratchpad[1] = OWI_ReceiveByte(OWI_BUS);
     // todo test for negative values
-    if ((scratchpad[1]&0x80)){
-        // negative
-        unsigned int tmp;
-        tmp = ((unsigned int)scratchpad[1]<<8)|scratchpad[0];
-        tmp = ~tmp + 1;
-        scratchpad[0] = tmp;
-        scratchpad[1] = tmp>>8;
-        negative=1;
-    }
-    int result=(scratchpad[0]>>4)|((scratchpad[1]&7)<<4);
-    if(negative){
-        result=-result;
-    }
-    temp[device] = result;
+    cli();
+
+    // we're using DS1820 here (NOT DS18B20).
+    // For DS1820 temperature is represented in terms of 1/2 C (it's 1/16 for DS18B20)
+
+    temp[device]=(*((int*)scratchpad))/2;
+
+    sei();
 }
 
 int main(void)
@@ -244,6 +277,9 @@ int main(void)
 
     _delay_ms(1000);
 
+    // Global enable interrupts
+    sei();
+
     OWI_Init(OWI_BUS);
 
     unsigned char devicesFound=0;
@@ -254,18 +290,16 @@ int main(void)
             temp[1]=-33;
             continue;
         }
+        break;
     }
 
-    // Global enable interrupts
-    sei();
-
     while (1){
-        getds1820(0);
-        _delay_ms(3000);
-        getds1820(1);
-        _delay_ms(3000);
+        for(unsigned char i=0;i<devicesFound;i++){
+            getds1820(i);
+            _delay_ms(3000);
+        }
     };
 
     return 0;
 }
-               
+

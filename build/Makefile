@@ -2,7 +2,7 @@
 PROJECT = termod4
 MCU = atmega8
 F_CPU=8000000L
-PROGRAMMATOR_COM_PORT = COM3
+PROGRAMMATOR_COM_PORT = /dev/ttyACM1
 
 INCLUDES = -I"../" -I"../OWI/"  
 
@@ -45,7 +45,7 @@ LINKONLYOBJECTS =
 ## Build
 all: $(TARGET) $(PROJECT).hex $(PROJECT).eep $(PROJECT).lss size
 	@ echo 'all'
-	@ echo avrdude -c avr910 -p m8 -P $(PROGRAMMATOR_COM_PORT) -U flash:w:$(PROJECT).hex > prorgamm.bat
+	@ echo avrdude -c avr910 -p m8 -P $(PROGRAMMATOR_COM_PORT) -U flash:w:$(PROJECT).hex > prorgamm.sh
 
 ## Compile
 %.o : %.c
@@ -71,7 +71,7 @@ $(TARGET): $(OBJECTS)
 
 size: ${TARGET}
 	@ echo 'size' $<
-	avr-size ${TARGET}
+	avr-size -C --mcu=${MCU} ${TARGET}
 
 ## Clean target
 .PHONY: clean
@@ -81,5 +81,5 @@ clean:
 
 
 ## Other dependencies
--include $(shell if not exist "dep" mkdir dep) $(wildcard dep/*)
+-include $(shell mkdir -p dep) $(wildcard dep/*)
 

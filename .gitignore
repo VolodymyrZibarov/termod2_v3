@@ -1,0 +1,13 @@
+# This file is used to ignore files which are generated
+# ----------------------------------------------------------------------------
+
+*.user
+*.creator.user.*
+*.o
+*.d
+*.hex
+*.sh
+*.eep
+*.elf
+*.lss
+*.map
