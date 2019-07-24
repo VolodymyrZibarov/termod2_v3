@@ -30,7 +30,8 @@ static unsigned char maxdig=4;
 static int number=0;
 static int temp[2]={0x7fff,0x7fff};
 static unsigned char nowTempId=0;
-static int nowTempCounter=0;
+static int tempIndexUpdateCounter=0;
+static unsigned char elementsCountInDig=8;
 
 #define mdig12_port PORTC
 #define mdig1_pin 4
@@ -54,15 +55,58 @@ static int nowTempCounter=0;
 #define mg_pin 1
 #define dp_pin 2
 
+//#define TESTING
+
+#define SAME_BRIGHTNESS_ALWAYS_PROCESS_ALL_NUMBERS
+
+#ifdef TESTING
+    unsigned char testCounter=0;
+#endif
+
+#ifndef TESTING
+    #define TEMP_CHANGE_PERIOD 7800
+#else
+    #define TEMP_CHANGE_PERIOD 1950 // 0.5 s
+#endif
 void comp(void){
+
+#ifdef TESTING
+    if(testCounter%1==0){
+        digs[1]=digs[2];
+        digs[2]=digs[3];
+        digs[3]=digs[4];
+    }
+    digs[4]=0x00;
+    for(unsigned char i=0;i<(testCounter%9);i++){
+        digs[4]=(digs[4]<<1)|1;
+    }
+    testCounter++;
+    return;
+#endif
+
+#ifndef SAME_BRIGHTNESS_ALWAYS_PROCESS_ALL_NUMBERS
     if(nowTempId==0){
         digs[4]=0x01;
         maxdig=4;
     }else{
         maxdig=3;
     }
+#else
+    digs[1]=0;
+    digs[2]=0;
+    //digs[3]=0;// this will be always set, we don't need to set it to 0
+    if(nowTempId==0){
+        digs[4]=0x01;   // upper dush '~' - for outdoor temperature
+    }else{
+        digs[4]=0x08;   // underscor '_' - for indoors temperatur
+    }
+#endif
+
+
     if(number==0x7fff){
+#ifndef SAME_BRIGHTNESS_ALWAYS_PROCESS_ALL_NUMBERS
         mindig=2;
+#endif
         digs[2]=0x40;
         digs[3]=0x40;
         return;
@@ -83,7 +127,9 @@ void comp(void){
     if(number<0){k++;}
     if(number>=10 || number<=-10){k++;}
     if(number>=100){k++;}
+#ifndef SAME_BRIGHTNESS_ALWAYS_PROCESS_ALL_NUMBERS
     mindig=4-k;
+#endif
 
     // LED names:
     //
@@ -140,26 +186,30 @@ void comp(void){
     }
 }
 
-// Timer 0 overflow interrupt service routine
-ISR(TIMER0_OVF_vect){
-    nowTempCounter++;
-    if(nowTempCounter>=7800){   // 2 sec
-        nowTempCounter=0;
-        nowTempId++;
-        if(nowTempId>1){
-            nowTempId=0;
-        }
-        number=temp[nowTempId];
-        comp();
-        nowdig=maxdig;
-        showDigCounter=250;
-    }
+void timer0OVF_func(){
+    tempIndexUpdateCounter++;
 
     showDigCounter++;
-    if(showDigCounter>20){
-        showDigCounter=1;
+    if(showDigCounter==elementsCountInDig){ // elementsCountInDig will be 8 at max
+        // PWM this
+        // if only one element (LED) of a 7-elemeent symbol is light-up currently, we powering it only 1/8 of our duty cycle, to not overcurrent the LED
+        // and for symbols to maintain constant brightness independently of symbol shown
+        mae_port&=~((1<<ma_pin)|(1<<mb_pin)|(1<<mc_pin)|(1<<md_pin)|(1<<me_pin));
+        mfgdp_port&=~((1<<mf_pin)|(1<<mg_pin)|(1<<dp_pin));
+    }
+    if(showDigCounter==8){
+        showDigCounter=0;
         nowdig++;
         if(nowdig>maxdig){
+            if(tempIndexUpdateCounter>TEMP_CHANGE_PERIOD){
+                tempIndexUpdateCounter=0;
+                nowTempId++;
+                if(nowTempId>1){
+                    nowTempId=0;
+                }
+                number=temp[nowTempId];
+                comp();
+            }
             nowdig=mindig;
         }
 
@@ -171,8 +221,7 @@ ISR(TIMER0_OVF_vect){
         mdig3_port|=(1<<mdig3_pin);
         mdig4_port|=(1<<mdig4_pin);
 
-        mae_port&=~((1<<ma_pin)|(1<<mb_pin)|(1<<mc_pin)|(1<<md_pin)|(1<<me_pin));
-        mfgdp_port&=~((1<<mf_pin)|(1<<mg_pin)|(1<<dp_pin));
+        // not clearing elements pins here, because we cleared them before
 
         // select digit
         switch(nowdig){
@@ -184,19 +233,37 @@ ISR(TIMER0_OVF_vect){
 
         unsigned char dig=digs[nowdig];
 
-        // light up elements
-        mae_port|=((((dig >> 0)&1)<<ma_pin)|
-                   (((dig >> 1)&1)<<mb_pin)|
-                   (((dig >> 2)&1)<<mc_pin)|
-                   (((dig >> 3)&1)<<md_pin)|
-                   (((dig >> 4)&1)<<me_pin)
-                   );
-        mfgdp_port|=((((dig >> 5)&1)<<mf_pin)|
-                     (((dig >> 6)&1)<<mg_pin)|
-                     (((dig >> 7)&1)<<dp_pin)
-                     );
+        if(dig!=0x00){
+            // light up elements
+            mae_port|=((((dig >> 0)&1)<<ma_pin)|
+                       (((dig >> 1)&1)<<mb_pin)|
+                       (((dig >> 2)&1)<<mc_pin)|
+                       (((dig >> 3)&1)<<md_pin)|
+                       (((dig >> 4)&1)<<me_pin)
+                       );
+            mfgdp_port|=((((dig >> 5)&1)<<mf_pin)|
+                         (((dig >> 6)&1)<<mg_pin)|
+                         (((dig >> 7)&1)<<dp_pin)
+                         );
 
+            elementsCountInDig=
+                    ((dig >> 0)&1)+
+                    ((dig >> 1)&1)+
+                    ((dig >> 2)&1)+
+                    ((dig >> 3)&1)+
+                    ((dig >> 4)&1)+
+                    ((dig >> 5)&1)+
+                    ((dig >> 6)&1)+
+                    ((dig >> 7)&1);
+        }else{
+            elementsCountInDig=0;
+        }
     }
+}
+
+// Timer 0 overflow interrupt service routine
+ISR(TIMER0_OVF_vect){
+    timer0OVF_func();
 }
 
 void getds1820(unsigned char device){
@@ -296,7 +363,7 @@ int main(void)
     while (1){
         for(unsigned char i=0;i<devicesFound;i++){
             getds1820(i);
-            _delay_ms(3000);
+            _delay_ms(5000);    // test temperature rarely to reduce sensor heating
         }
     };
 
