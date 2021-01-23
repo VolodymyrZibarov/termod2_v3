@@ -111,10 +111,11 @@ void comp(void){
         digs[3]=0x40;
         return;
     }
-    char tmp[3];
+    char tmp[4];
     tmp[0]=0;
     tmp[1]=0;
     tmp[2]=0;
+    tmp[3]=0;
     unsigned char k=1;
     unsigned char i;
     if(number>999){
